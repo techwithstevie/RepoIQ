@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { getRepoSummary } from '@/services/api';
 import type { SummaryResult } from '@/types';
-import { displaySlug } from '@/lib/utils';
 
 type Props = {
   repoSlug: string;
 };
 
-function SummaryPanel({ repoSlug }: Props) {
+export function SummaryPanel({ repoSlug }: Props) {
   const [data, setData] = useState<SummaryResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -29,38 +28,29 @@ function SummaryPanel({ repoSlug }: Props) {
 
   if (loading) {
     return (
-      <div className="summary-loading">
-        <Loader2 size={24} className="spin" />
-        <p>Generating recruiter summary…</p>
+      <div className="summary-loading-premium">
+        <Loader2 size={18} className="spin" />
+        <span>Generating executive summary...</span>
       </div>
     );
   }
 
   if (error) {
-    return <div className="summary-error">{error}</div>;
+    return <div className="summary-error-premium">{error}</div>;
   }
 
   if (!data) return null;
 
   return (
-    <section className="summary-panel">
-      <div className="summary-header">
-        <BookOpen size={18} />
-        <span>
-          Recruiter overview — <strong>{displaySlug(repoSlug)}</strong>
-        </span>
-      </div>
-
+    <div className="summary-stack">
       {Object.entries(data.summary).map(([question, answer]) => (
-        <div key={question} className="summary-section">
-          <h4 className="summary-q">{question}</h4>
-          <div className="summary-a">
+        <section key={question} className="summary-block">
+          <h4>{question}</h4>
+          <div className="summary-content">
             <ReactMarkdown>{answer}</ReactMarkdown>
           </div>
-        </div>
+        </section>
       ))}
-    </section>
+    </div>
   );
 }
-
-export default SummaryPanel;

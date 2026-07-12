@@ -1,7 +1,7 @@
 import { generateId } from '@/lib/utils';
 import { streamQuestion } from '@/services/api';
 import type { Message } from '@/types';
-import { FileCode2, Send, StopCircle } from 'lucide-react';
+import { FileCode2, Send, Sparkles, StopCircle } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
@@ -10,15 +10,15 @@ type Props = {
 };
 
 const QUICK_PROMPTS = [
-  'What does this project do?',
-  'What frameworks are used?',
-  'Explain the folder structure',
-  'What are the key components?',
-  'Is there authentication logic?',
-  'What stands out about the code quality?',
+  'What does this repository do?',
+  'Explain the architecture in plain English.',
+  'What parts of the code feel strongest?',
+  'What should a recruiter know first?',
+  'How is the RAG pipeline implemented?',
+  'What backend patterns are used here?',
 ];
 
-function ChatWindow({ repoSlug }: Props) {
+export function ChatWindow({ repoSlug }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -30,10 +30,10 @@ function ChatWindow({ repoSlug }: Props) {
   }, [messages]);
 
   useEffect(() => {
+    ctrlRef.current?.abort();
     setMessages([]);
     setInput('');
     setStreaming(false);
-    ctrlRef.current?.abort();
   }, [repoSlug]);
 
   const sendMessage = (text: string) => {
@@ -63,9 +63,7 @@ function ChatWindow({ repoSlug }: Props) {
       (token) => {
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, content: m.content + token, loading: false }
-              : m
+            m.id === assistantId ? { ...m, content: m.content + token, loading: false } : m
           )
         );
       },
@@ -101,17 +99,34 @@ function ChatWindow({ repoSlug }: Props) {
   };
 
   return (
-    <section className="chat-window">
+    <div className="chat-premium">
+      <div className="chat-premium-header">
+        <div>
+          <div className="panel-kicker">Guided analysis</div>
+          <h3>Ask RepoIQ about the codebase</h3>
+        </div>
+        <div className="mini-pill">
+          <Sparkles size={14} />
+          Retrieval-backed answers
+        </div>
+      </div>
+
       {messages.length === 0 ? (
-        <div className="chat-empty">
-          <FileCode2 size={40} />
-          <h3>Ask anything about this codebase</h3>
-          <p>RepoIQ uses retrieval over the repo to answer with real code context.</p>
-          <div className="quick-prompts">
+        <div className="chat-empty-premium">
+          <div className="chat-empty-icon">
+            <FileCode2 size={32} />
+          </div>
+          <h4>Start with a high-signal question</h4>
+          <p>
+            The best questions focus on architecture, stack choices, implementation patterns,
+            and recruiter-facing strengths.
+          </p>
+
+          <div className="quick-prompt-grid">
             {QUICK_PROMPTS.map((prompt) => (
               <button
                 key={prompt}
-                className="quick-prompt-btn"
+                className="quick-prompt-card"
                 onClick={() => sendMessage(prompt)}
               >
                 {prompt}
@@ -120,10 +135,10 @@ function ChatWindow({ repoSlug }: Props) {
           </div>
         </div>
       ) : (
-        <div className="messages">
+        <div className="messages-premium">
           {messages.map((msg) => (
-            <article key={msg.id} className={`message message--${msg.role}`}>
-              <div className="message-bubble">
+            <article key={msg.id} className={`message-premium message-premium--${msg.role}`}>
+              <div className="message-surface">
                 {msg.loading ? (
                   <span className="typing-dots">
                     <span />
@@ -136,10 +151,9 @@ function ChatWindow({ repoSlug }: Props) {
               </div>
 
               {msg.sources && msg.sources.length > 0 && (
-                <div className="message-sources">
-                  <span className="sources-label">Sources:</span>
+                <div className="source-row">
                   {msg.sources.map((s) => (
-                    <span key={s} className="source-chip">
+                    <span key={s} className="source-tag">
                       {s}
                     </span>
                   ))}
@@ -151,23 +165,23 @@ function ChatWindow({ repoSlug }: Props) {
         </div>
       )}
 
-      <div className="chat-input-bar">
+      <div className="chat-composer">
         <textarea
-          className="chat-textarea"
+          className="chat-composer-input"
           rows={2}
-          placeholder="Ask about the repository..."
+          placeholder="Ask about architecture, stack, quality, or implementation details..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={streaming}
         />
         {streaming ? (
-          <button className="btn-stop" onClick={stop} aria-label="Stop generation">
-            <StopCircle size={20} />
+          <button className="composer-btn composer-btn-stop" onClick={stop} aria-label="Stop">
+            <StopCircle size={18} />
           </button>
         ) : (
           <button
-            className="btn-send"
+            className="composer-btn composer-btn-send"
             onClick={() => sendMessage(input)}
             disabled={!input.trim()}
             aria-label="Send"
@@ -176,8 +190,6 @@ function ChatWindow({ repoSlug }: Props) {
           </button>
         )}
       </div>
-    </section>
+    </div>
   );
 }
-
-export default ChatWindow;
