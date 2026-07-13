@@ -19,4 +19,4 @@ app.add_middleware(
 
 app.include_router(health.router, tags=["Health"])
 app.include_router(repos.router, prefix="/api/repos", tags=["Repositories"])
-app.include_router(query.rotuer, prefix="/api/query", tags=["Query"])
+app.include_router(query.router, prefix="/api/query", tags=["Query"])

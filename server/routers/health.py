@@ -2,9 +2,9 @@ from fastapi import APIRouter
 import httpx
 from config import settings
 
-router = APIRouters()
+router = APIRouter()
 
-@router.get("/health")
+@router.get("/")
 async def health():
     ollama_ok = False
     try:

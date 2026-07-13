@@ -4,8 +4,8 @@ from typing import List, Dict, Any
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from langchain_ollama import OllamaEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from app.config import settings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from config import settings
 
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120

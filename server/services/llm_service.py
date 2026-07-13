@@ -1,6 +1,6 @@
 from typing import AsyncGenerator, List, Dict, Any
 import httpx, json
-from app.config import settings
+from config import settings
 
 SYSTEM_PROMPT = """You are RepoIQ, an expert technical assistant helping recruiters
 understand a candidate's GitHub codebase. Explain architecture decisions clearly,

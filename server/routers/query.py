@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
-from app.services.rag_service import query_repo
-from app.services.llm_service import stream_answer, get_answer
+from services.rag_service import query_repo
+from services.llm_service import stream_answer, get_answer
 
 router = APIRouter()
 

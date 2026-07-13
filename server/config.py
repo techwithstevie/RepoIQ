@@ -14,5 +14,5 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
-os.makedidrs(settings.CHROMA_PERSIST_DIR, exist_ok=True)
+os.makedirs(settings.CHROMA_PERSIST_DIR, exist_ok=True)
 os.makedirs(settings.REPOS_DIR, exist_ok=True)
