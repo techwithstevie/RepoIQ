@@ -1,6 +1,8 @@
+import asyncio
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from langchain_ollama import OllamaEmbeddings
@@ -10,6 +12,8 @@ from config import settings
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
 TOP_K = 8
+BATCH = 200
+MAX_EMBED_CONCURRENCY = 4
 
 def _col_name(slug: str) -> str:
     return "repo_" + slug.replace("-", "_").replace(".", "_")[:60]
@@ -26,7 +30,19 @@ def _embedder() -> OllamaEmbeddings:
         base_url=settings.OLLAMA_BASE_URL,
     )
 
-def index_repo(repo_path: Path, file_paths: List[Path], slug: str) -> int:
+def _read_and_chunk(args: Tuple[Path, Path]) -> Tuple[str, List[str]]:
+    fpath, repo_path = args
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, add_start_index=True
+    )
+    try:
+        text = fpath.read_text(errors="replace")
+        rel = str(fpath.relative_to(repo_path))
+        return rel, splitter.split_text(text)
+    except Exception:
+        return "", []
+
+async def index_repo(repo_path: Path, file_paths: List[Path], slug: str) -> int:
     client = _client()
     embedder = _embedder()
     col_name = _col_name(slug)
@@ -35,31 +51,37 @@ def index_repo(repo_path: Path, file_paths: List[Path], slug: str) -> int:
     except Exception:
         pass
     collection = client.create_collection(col_name)
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, add_start_index=True
-    )
+
+    # Read + chunk all files in parallel
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = await asyncio.gather(
+            *[loop.run_in_executor(pool, _read_and_chunk, (fp, repo_path)) for fp in file_paths]
+        )
+
     docs, metadatas, ids = [], [], []
-    for fpath in file_paths:
-        try:
-            text = fpath.read_text(errors="replace")
-        except Exception:
+    for rel, chunks in results:
+        if not rel:
             continue
-        rel = str(fpath.relative_to(repo_path))
-        for i, chunk in enumerate(splitter.split_text(text)):
+        for i, chunk in enumerate(chunks):
             chunk_id = hashlib.md5(f"{rel}:{i}:{chunk[:50]}".encode()).hexdigest()
             docs.append(chunk)
             metadatas.append({"file": rel, "chunk_index": i, "repo": slug})
             ids.append(chunk_id)
-    # Batch to avoid OOM
-    BATCH = 64
-    for start in range(0, len(docs), BATCH):
-        embs = embedder.embed_documents(docs[start:start+BATCH])
-        collection.add(
-            documents=docs[start:start+BATCH],
-            metadatas=metadatas[start:start+BATCH],
-            ids=ids[start:start+BATCH],
-            embeddings=embs,
-        )
+
+    # Embed all batches concurrently, capped to avoid overwhelming Ollama
+    sem = asyncio.Semaphore(MAX_EMBED_CONCURRENCY)
+    batches = [
+        (docs[i:i+BATCH], metadatas[i:i+BATCH], ids[i:i+BATCH])
+        for i in range(0, len(docs), BATCH)
+    ]
+
+    async def _embed_and_store(b_docs, b_meta, b_ids):
+        async with sem:
+            embs = await asyncio.to_thread(embedder.embed_documents, b_docs)
+        collection.add(documents=b_docs, metadatas=b_meta, ids=b_ids, embeddings=embs)
+
+    await asyncio.gather(*[_embed_and_store(d, m, i) for d, m, i in batches])
     return len(docs)
 
 def query_repo(slug: str, question: str) -> List[Dict[str, Any]]:

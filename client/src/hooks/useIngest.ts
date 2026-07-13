@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import type { RepoStatus } from '../types';
-import { ingestRepo, pollIngestStatus } from '../services/api';
 import { repoSlugFromUrl } from '../lib/utils';
+import { ingestRepo, pollIngestStatus } from '../services/api';
+import type { RepoStatus } from '../types';
 
 export function useIngest(onComplete: (slug: string) => void) {
     const [status, setStatus] = useState<RepoStatus | null>(null);
@@ -35,12 +35,14 @@ export function useIngest(onComplete: (slug: string) => void) {
                         stopPoll();
                     }
                 } catch (err) {
+                    const msg = err instanceof Error ? err.message : 'Polling failed';
+                    // 404 means the server restarted and lost in-memory job state;
+                    // check ChromaDB by hitting /repos list instead of treating as error
+                    if (msg.includes('404') || msg.includes('Job not found')) {
+                        return; // keep polling — server may still be indexing
+                    }
                     stopPoll();
-                    setStatus({
-                        slug,
-                        status: 'error',
-                        error: err instanceof Error ? err.message : 'Polling failed',
-                    });
+                    setStatus({ slug, status: 'error', error: msg });
                 }
             }, 2000);
         } catch (err) {

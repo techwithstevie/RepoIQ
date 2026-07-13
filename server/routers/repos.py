@@ -6,6 +6,7 @@ from pathlib import Path
 from services.git_service import clone_or_pull, list_files, repo_slug
 from services.rag_service import index_repo, delete_repo_index, list_indexed_repos
 from config import settings
+import asyncio
 
 router = APIRouter()
 _jobs: dict = {}
@@ -19,12 +20,12 @@ class IngestStatus(BaseModel):
     chunks: int = 0
     error: str = ""
 
-def _run_ingest(url: str, slug: str):
+async def _run_ingest(url: str, slug: str):
     _jobs[slug] = IngestStatus(slug=slug, status="cloning")
     try:
-        repo_path = clone_or_pull(url)
+        repo_path = await asyncio.to_thread(clone_or_pull, url)
         _jobs[slug].status = "indexing"
-        n = index_repo(repo_path, list_files(repo_path), slug)
+        n = await index_repo(repo_path, list_files(repo_path), slug)
         _jobs[slug] = IngestStatus(slug=slug, status="done", chunks=n)
     except Exception as e:
         _jobs[slug] = IngestStatus(slug=slug, status="error", error=str(e))
@@ -41,7 +42,9 @@ async def ingest_repo(req: IngestRequest, background_tasks: BackgroundTasks):
 @router.get("/status/{slug}", response_model=IngestStatus)
 async def ingest_status(slug: str):
     if slug not in _jobs:
-        if slug in list_indexed_repos():
+        # _col_name normalises dashes/dots to underscores, so compare accordingly
+        normalized = slug.replace("-", "_").replace(".", "_")
+        if normalized in list_indexed_repos():
             return IngestStatus(slug=slug, status="done")
         raise HTTPException(status_code=404, detail="Job not found")
     return _jobs[slug]

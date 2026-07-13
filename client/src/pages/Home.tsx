@@ -63,7 +63,6 @@ export function HomePage() {
                 <IngestPanel onRepoReady={handleRepoReady} />
 
                 <div className="sidebar-section">
-                    <div className="sidebar-label">Indexed repositories</div>
                     <RepoSelector
                         selected={selectedRepo}
                         onSelect={(slug) => {
