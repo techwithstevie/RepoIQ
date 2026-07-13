@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from services.git_service import clone_or_pull, list_files, repo_slug
 from services.rag_service import index_repo, delete_repo_index, list_indexed_repos
+from services.cache_service import clear_cache, read_cache
 from config import settings
 import asyncio
 
@@ -22,6 +23,7 @@ class IngestStatus(BaseModel):
 
 async def _run_ingest(url: str, slug: str):
     _jobs[slug] = IngestStatus(slug=slug, status="cloning")
+    clear_cache(slug)
     try:
         repo_path = await asyncio.to_thread(clone_or_pull, url)
         _jobs[slug].status = "indexing"
@@ -42,10 +44,11 @@ async def ingest_repo(req: IngestRequest, background_tasks: BackgroundTasks):
 @router.get("/status/{slug}", response_model=IngestStatus)
 async def ingest_status(slug: str):
     if slug not in _jobs:
-        # _col_name normalises dashes/dots to underscores, so compare accordingly
+        # legacy safety net: slugs are normalized at the source now, but tolerate
+        # any lingering dashed/dotted references from older clients
         normalized = slug.replace("-", "_").replace(".", "_")
         if normalized in list_indexed_repos():
-            return IngestStatus(slug=slug, status="done")
+            return IngestStatus(slug=normalized, status="done")
         raise HTTPException(status_code=404, detail="Job not found")
     return _jobs[slug]
 
@@ -53,11 +56,19 @@ async def ingest_status(slug: str):
 async def list_repos():
     return list_indexed_repos()
 
+@router.get("/{slug}/stats")
+async def repo_stats(slug: str):
+    stats = read_cache(slug, "stats")
+    if not stats:
+        raise HTTPException(status_code=404, detail="No stats available for this repo.")
+    return stats
+
 @router.delete("/{slug}")
 async def remove_repo(slug: str):
     dest = Path(settings.REPOS_DIR) / slug
     if dest.exists():
         shutil.rmtree(dest)
     ok = delete_repo_index(slug)
+    clear_cache(slug)
     _jobs.pop(slug, None)
     return {"deleted": ok, "slug": slug}

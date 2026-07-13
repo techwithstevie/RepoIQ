@@ -13,7 +13,27 @@ export interface Message {
     loading?: boolean;
 }
 
+export interface SummarySection {
+    id: string;
+    title: string;
+    summary: string;
+    highlights: string[];
+}
+
 export interface SummaryResult {
     repo: string;
-    summary: Record<string, string>;
+    sections: SummarySection[];
+}
+
+export interface EvidenceFile {
+    file: string;
+    score: number;
+    count: number;
+}
+
+export interface RepoStats {
+    files: number;
+    chunks: number;
+    stack: string[];
+    readiness: number;
 }

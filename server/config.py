@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     OLLAMA_EMBED_MODEL: str = "nomic-embed-text"
     CHROMA_PERSIST_DIR: str = "./chroma_db"
     REPOS_DIR: str = "./repos"
+    CACHE_DIR: str = "./cache"
     CORS_ORIGINS: List[str] = ["http://localhost:5173"]
 
     class Config:
@@ -16,3 +17,4 @@ class Settings(BaseSettings):
 settings = Settings()
 os.makedirs(settings.CHROMA_PERSIST_DIR, exist_ok=True)
 os.makedirs(settings.REPOS_DIR, exist_ok=True)
+os.makedirs(settings.CACHE_DIR, exist_ok=True)

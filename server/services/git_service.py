@@ -16,7 +16,9 @@ SKIP_DIRS = {
 
 def repo_slug(url: str) -> str:
     parts = url.rstrip("/").split("/")
-    return f"{parts[-2]}__{parts[-1]}" if len(parts) >= 2 else parts[-1]
+    raw = f"{parts[-2]}__{parts[-1]}" if len(parts) >= 2 else parts[-1]
+    raw = raw[:-4] if raw.endswith(".git") else raw
+    return raw.replace("-", "_").replace(".", "_")
 
 def clone_or_pull(url: str) -> Path:
     dest = Path(settings.REPOS_DIR) / repo_slug(url)

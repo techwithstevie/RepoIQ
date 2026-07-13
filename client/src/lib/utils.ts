@@ -7,7 +7,8 @@ export function cn(...inputs: ClassValue[]) {
 export function repoSlugFromUrl(url: string): string {
     const clean = url.replace(/\.git$/, '').replace(/\/$/, '');
     const parts = clean.split('/');
-    return `${parts[parts.length - 2]}__${parts[parts.length - 1]}`;
+    const raw = `${parts[parts.length - 2]}__${parts[parts.length - 1]}`;
+    return raw.replace(/-/g, '_').replace(/\./g, '_');
 }
 
 export function displaySlug(slug: string): string {

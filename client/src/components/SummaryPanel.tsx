@@ -1,30 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import { getRepoSummary } from '@/services/api';
 import type { SummaryResult } from '@/types';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 
 type Props = {
   repoSlug: string;
+  data: SummaryResult | null;
+  loading: boolean;
+  error: string;
 };
 
-export function SummaryPanel({ repoSlug }: Props) {
-  const [data, setData] = useState<SummaryResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (!repoSlug) return;
-
-    setLoading(true);
-    setError('');
-    setData(null);
-
-    getRepoSummary(repoSlug)
-      .then(setData)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load summary'))
-      .finally(() => setLoading(false));
-  }, [repoSlug]);
+function SummaryPanel({ data, loading, error }: Props) {
 
   if (loading) {
     return (
@@ -39,18 +23,30 @@ export function SummaryPanel({ repoSlug }: Props) {
     return <div className="summary-error-premium">{error}</div>;
   }
 
-  if (!data) return null;
+  if (!data || data.sections.length === 0) {
+    return <div className="summary-empty">No summary available.</div>;
+  }
 
   return (
     <div className="summary-stack">
-      {Object.entries(data.summary).map(([question, answer]) => (
-        <section key={question} className="summary-block">
-          <h4>{question}</h4>
-          <div className="summary-content">
-            <ReactMarkdown>{answer}</ReactMarkdown>
-          </div>
+      {data.sections.map((section) => (
+        <section key={section.id} className="summary-block">
+          <h4>{section.title}</h4>
+          <p className="summary-text">{section.summary}</p>
+          {section.highlights.length > 0 && (
+            <ul className="summary-highlights">
+              {section.highlights.map((point, i) => (
+                <li key={i}>
+                  <CheckCircle2 size={14} />
+                  <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ))}
     </div>
   );
 }
+
+export default SummaryPanel;

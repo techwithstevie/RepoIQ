@@ -38,6 +38,21 @@ export async function getRepoSummary(repoSlug: string) {
     return r.json();
 }
 
+import type { EvidenceFile, RepoStats } from '@/types';
+
+export async function getRepoEvidence(repoSlug: string) {
+    const r = await fetch(`${BASE}/query/evidence/${repoSlug}`);
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    return data.evidence as EvidenceFile[];
+}
+
+export async function getRepoStats(repoSlug: string): Promise<RepoStats> {
+    const r = await fetch(`${BASE}/repos/${repoSlug}/stats`);
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+}
+
 export function streamQuestion(
     repoSlug: string,
     question: string,

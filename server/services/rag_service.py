@@ -8,6 +8,8 @@ from chromadb.config import Settings as ChromaSettings
 from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from config import settings
+from services.stats_service import compute_repo_stats
+from services.cache_service import write_cache
 
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
@@ -60,9 +62,11 @@ async def index_repo(repo_path: Path, file_paths: List[Path], slug: str) -> int:
         )
 
     docs, metadatas, ids = [], [], []
+    indexed_files = []
     for rel, chunks in results:
         if not rel:
             continue
+        indexed_files.append(rel)
         for i, chunk in enumerate(chunks):
             chunk_id = hashlib.md5(f"{rel}:{i}:{chunk[:50]}".encode()).hexdigest()
             docs.append(chunk)
@@ -82,9 +86,13 @@ async def index_repo(repo_path: Path, file_paths: List[Path], slug: str) -> int:
         collection.add(documents=b_docs, metadatas=b_meta, ids=b_ids, embeddings=embs)
 
     await asyncio.gather(*[_embed_and_store(d, m, i) for d, m, i in batches])
+
+    stats = compute_repo_stats(indexed_files, len(docs))
+    write_cache(slug, "stats", stats)
+
     return len(docs)
 
-def query_repo(slug: str, question: str) -> List[Dict[str, Any]]:
+def query_repo(slug: str, question: str, n_results: int = TOP_K) -> List[Dict[str, Any]]:
     client = _client()
     embedder = _embedder()
     try:
@@ -92,7 +100,7 @@ def query_repo(slug: str, question: str) -> List[Dict[str, Any]]:
     except Exception:
         return []
     q_emb = embedder.embed_query(question)
-    results = collection.query(query_embeddings=[q_emb], n_results=TOP_K)
+    results = collection.query(query_embeddings=[q_emb], n_results=n_results)
     return [
         {"content": doc, "file": meta.get("file", ""), "repo": meta.get("repo", "")}
         for doc, meta in zip(results["documents"][0], results["metadatas"][0])

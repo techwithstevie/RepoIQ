@@ -1,42 +1,132 @@
-import { useMemo, useState } from 'react';
+import { ChatWindow } from '@/components/ChatWindow';
+import IngestPanel from '@/components/IngestPanel';
+import RepoSelector from '@/components/RepoSelector';
+import SummaryPanel from '@/components/SummaryPanel';
+import { cn, displaySlug } from '@/lib/utils';
+import { getRepoEvidence, getRepoStats, getRepoSummary } from '@/services/api';
+import type { EvidenceFile, RepoStats, SummaryResult } from '@/types';
 import {
-    Bot,
     BookOpen,
-    Boxes,
+    Bot,
     ChevronRight,
     Database,
     FileCode2,
-    FolderGit2,
+    Loader2,
     MessageSquare,
     ShieldCheck,
     Sparkles,
 } from 'lucide-react';
-import IngestPanel from '@/components/IngestPanel';
-import RepoSelector from '@/components/RepoSelector';
-import { ChatWindow } from '@/components/ChatWindow';
-import { SummaryPanel } from '@/components/SummaryPanel';
-import { cn, displaySlug } from '@/lib/utils';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Tab = 'overview' | 'evidence' | 'chat';
 
-const MOCK_EVIDENCE = [
-    'src/App.tsx',
-    'src/components/RepoSelector.tsx',
-    'server/app/services/rag_service.py',
-    'server/app/services/llm_service.py',
-    'server/app/routers/query.py',
-];
 
 export function HomePage() {
     const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [activeTab, setActiveTab] = useState<Tab>('overview');
+    const [summaryData, setSummaryData] = useState<SummaryResult | null>(null);
+    const [summaryLoading, setSummaryLoading] = useState(false);
+    const [summaryError, setSummaryError] = useState('');
+    const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>([]);
+    const [evidenceLoading, setEvidenceLoading] = useState(false);
+    const [evidenceError, setEvidenceError] = useState('');
+    const [stats, setStats] = useState<RepoStats | null>(null);
+    const [statsLoading, setStatsLoading] = useState(false);
 
     const handleRepoReady = (slug: string) => {
         setRefreshTrigger((n) => n + 1);
         setSelectedRepo(slug);
         setActiveTab('overview');
     };
+
+    const summaryRepoRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedRepo) {
+            setSummaryData(null);
+            setSummaryError('');
+            setSummaryLoading(false);
+            summaryRepoRef.current = null;
+            return;
+        }
+
+        const currentRepo = selectedRepo;
+        summaryRepoRef.current = currentRepo;
+        setSummaryLoading(true);
+        setSummaryError('');
+
+        getRepoSummary(currentRepo)
+            .then((data) => {
+                if (summaryRepoRef.current !== currentRepo) return;
+                setSummaryData(data);
+            })
+            .catch((err) => {
+                if (summaryRepoRef.current !== currentRepo) return;
+                setSummaryError(err instanceof Error ? err.message : 'Failed to load summary');
+            })
+            .finally(() => {
+                if (summaryRepoRef.current === currentRepo) setSummaryLoading(false);
+            });
+    }, [selectedRepo]);
+
+    const evidenceRepoRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedRepo) {
+            setEvidenceFiles([]);
+            setEvidenceError('');
+            setEvidenceLoading(false);
+            evidenceRepoRef.current = null;
+            return;
+        }
+
+        const currentRepo = selectedRepo;
+        evidenceRepoRef.current = currentRepo;
+        setEvidenceLoading(true);
+        setEvidenceError('');
+
+        getRepoEvidence(currentRepo)
+            .then((files) => {
+                if (evidenceRepoRef.current !== currentRepo) return;
+                setEvidenceFiles(files);
+            })
+            .catch((err) => {
+                if (evidenceRepoRef.current !== currentRepo) return;
+                setEvidenceError(err instanceof Error ? err.message : 'Failed to load evidence');
+            })
+            .finally(() => {
+                if (evidenceRepoRef.current === currentRepo) setEvidenceLoading(false);
+            });
+    }, [selectedRepo]);
+
+    const statsRepoRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!selectedRepo) {
+            setStats(null);
+            setStatsLoading(false);
+            statsRepoRef.current = null;
+            return;
+        }
+
+        const currentRepo = selectedRepo;
+        statsRepoRef.current = currentRepo;
+        setStatsLoading(true);
+
+        getRepoStats(currentRepo)
+            .then((data) => {
+                if (statsRepoRef.current !== currentRepo) return;
+                setStats(data);
+            })
+            .catch(() => {
+                if (statsRepoRef.current !== currentRepo) return;
+                setStats(null);
+            })
+            .finally(() => {
+                if (statsRepoRef.current === currentRepo) setStatsLoading(false);
+            });
+    }, [selectedRepo]);
 
     const title = useMemo(
         () => (selectedRepo ? displaySlug(selectedRepo) : 'Candidate Code Intelligence'),
@@ -160,23 +250,35 @@ export function HomePage() {
                                 <div className="metric-strip">
                                     <div className="metric-card">
                                         <div className="metric-label">Indexed files</div>
-                                        <div className="metric-value">148</div>
+                                        <div className="metric-value">
+                                            {statsLoading ? '—' : (stats?.files.toLocaleString() ?? '—')}
+                                        </div>
                                         <div className="metric-meta">Source and config coverage</div>
                                     </div>
                                     <div className="metric-card">
                                         <div className="metric-label">Embedded chunks</div>
-                                        <div className="metric-value">1,264</div>
+                                        <div className="metric-value">
+                                            {statsLoading ? '—' : (stats?.chunks.toLocaleString() ?? '—')}
+                                        </div>
                                         <div className="metric-meta">Semantic retrieval ready</div>
                                     </div>
                                     <div className="metric-card">
                                         <div className="metric-label">Primary stack</div>
-                                        <div className="metric-value metric-stack">React · FastAPI · Ollama</div>
-                                        <div className="metric-meta">Frontend, backend, local AI</div>
+                                        <div className="metric-value metric-stack">
+                                            {statsLoading
+                                                ? '—'
+                                                : stats?.stack.length
+                                                    ? stats.stack.join(' · ')
+                                                    : 'Not detected'}
+                                        </div>
+                                        <div className="metric-meta">Detected from indexed file types</div>
                                     </div>
                                     <div className="metric-card">
                                         <div className="metric-label">Readiness score</div>
-                                        <div className="metric-value accent">8.7 / 10</div>
-                                        <div className="metric-meta">Based on structure and clarity</div>
+                                        <div className="metric-value accent">
+                                            {statsLoading ? '—' : stats ? `${stats.readiness} / 10` : '—'}
+                                        </div>
+                                        <div className="metric-meta">README, tests, CI &amp; config detected</div>
                                     </div>
                                 </div>
 
@@ -194,47 +296,14 @@ export function HomePage() {
                                                 </div>
                                             </div>
 
-                                            <SummaryPanel repoSlug={selectedRepo} />
+                                            <SummaryPanel
+                                                repoSlug={selectedRepo}
+                                                data={summaryData}
+                                                loading={summaryLoading}
+                                                error={summaryError}
+                                            />
                                         </section>
 
-                                        <section className="panel">
-                                            <div className="panel-header">
-                                                <div>
-                                                    <div className="panel-kicker">Strengths</div>
-                                                    <h3>Why this codebase feels senior</h3>
-                                                </div>
-                                            </div>
-
-                                            <div className="bullet-grid">
-                                                <div className="insight-card">
-                                                    <Boxes size={16} />
-                                                    <div>
-                                                        <h4>Separation of concerns</h4>
-                                                        <p>
-                                                            Clear split between ingestion, retrieval, generation, and UI workflows.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="insight-card">
-                                                    <FolderGit2 size={16} />
-                                                    <div>
-                                                        <h4>Real workflow alignment</h4>
-                                                        <p>
-                                                            Repository ingest, recruiter summary, and code Q&A map to a concrete use case.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="insight-card">
-                                                    <Database size={16} />
-                                                    <div>
-                                                        <h4>Practical local AI stack</h4>
-                                                        <p>
-                                                            Ollama plus local vector storage keeps the product cost-aware and private.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </section>
                                     </div>
 
                                     <div className="column-side">
@@ -275,29 +344,35 @@ export function HomePage() {
                                             </div>
 
                                             <div className="file-list">
-                                                {MOCK_EVIDENCE.map((file) => (
-                                                    <div key={file} className="file-row">
-                                                        <FileCode2 size={14} />
-                                                        <span>{file}</span>
-                                                        <ChevronRight size={14} />
+                                                {evidenceLoading ? (
+                                                    <div className="summary-loading-premium">
+                                                        <Loader2 size={18} className="spin" />
+                                                        <span>Loading evidence...</span>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </section>
-
-                                        <section className="panel side-panel">
-                                            <div className="panel-header">
-                                                <div>
-                                                    <div className="panel-kicker">Suggested prompts</div>
-                                                    <h3>Recruiter questions</h3>
-                                                </div>
-                                            </div>
-
-                                            <div className="prompt-list">
-                                                <button className="prompt-chip">What does this repo actually do?</button>
-                                                <button className="prompt-chip">How strong is the architecture?</button>
-                                                <button className="prompt-chip">What frameworks are used?</button>
-                                                <button className="prompt-chip">Are there signs of senior engineering?</button>
+                                                ) : evidenceError ? (
+                                                    <div className="summary-error-premium">{evidenceError}</div>
+                                                ) : evidenceFiles.length === 0 ? (
+                                                    <div className="summary-empty">No evidence files found.</div>
+                                                ) : (
+                                                    evidenceFiles.slice(0, 5).map((file) => (
+                                                        <div
+                                                            key={file.file}
+                                                            className="file-row file-row-clickable"
+                                                            role="button"
+                                                            tabIndex={0}
+                                                            onClick={() => setActiveTab('evidence')}
+                                                            onKeyDown={(e) => e.key === 'Enter' && setActiveTab('evidence')}
+                                                        >
+                                                            <FileCode2 size={14} />
+                                                            <div className="file-row-text">
+                                                                <span>{file.file}</span>
+                                                                <small>{file.count} chunks • {file.score}% relevance</small>
+                                                            </div>
+                                                            <span className="score-badge">{file.score}%</span>
+                                                            <ChevronRight size={14} />
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
                                         </section>
                                     </div>
@@ -316,18 +391,36 @@ export function HomePage() {
                                     </div>
 
                                     <div className="evidence-table">
-                                        {MOCK_EVIDENCE.map((file, idx) => (
-                                            <div className="evidence-row" key={file}>
-                                                <div className="evidence-rank">0{idx + 1}</div>
-                                                <div className="evidence-file">
-                                                    <div className="evidence-name">{file}</div>
-                                                    <div className="evidence-sub">
-                                                        Frequently relevant during retrieval and summary generation
-                                                    </div>
-                                                </div>
-                                                <div className="evidence-score">High relevance</div>
+                                        {evidenceLoading ? (
+                                            <div className="summary-loading-premium">
+                                                <Loader2 size={18} className="spin" />
+                                                <span>Loading evidence...</span>
                                             </div>
-                                        ))}
+                                        ) : evidenceError ? (
+                                            <div className="summary-error-premium">{evidenceError}</div>
+                                        ) : evidenceFiles.length === 0 ? (
+                                            <div className="summary-empty">No evidence files found.</div>
+                                        ) : (
+                                            evidenceFiles.map((file, idx) => (
+                                                <div
+                                                    className="evidence-row evidence-row-clickable"
+                                                    key={file.file}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => setActiveTab('evidence')}
+                                                    onKeyDown={(e) => e.key === 'Enter' && setActiveTab('evidence')}
+                                                >
+                                                    <div className="evidence-rank">0{idx + 1}</div>
+                                                    <div className="evidence-file">
+                                                        <div className="evidence-name">{file.file}</div>
+                                                        <div className="evidence-sub">
+                                                            {file.count} chunks · {file.score}% relevance
+                                                        </div>
+                                                    </div>
+                                                    <div className="evidence-score badge">{file.score}%</div>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
                                 </div>
                             </section>
