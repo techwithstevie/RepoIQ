@@ -1802,6 +1802,13 @@ textarea {
     background: rgba(255, 255, 255, 0.05);
 }
 
+.match-url-hint {
+    margin: var(--space-2) 0 0;
+    color: var(--text-faint);
+    font-size: var(--text-xs);
+    line-height: 1.4;
+}
+
 /* ─── Match Actions ───────────────────────────────────── */
 
 .match-actions {

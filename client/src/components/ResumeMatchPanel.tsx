@@ -297,10 +297,10 @@ export function ResumeMatchPanel() {
                         <section className="match-findings-card match-findings-card--amber">
                             <h3 className="match-findings-title">
                                 <AlertCircle size={15} />
-                                Gaps &amp; concerns
+                                Growth areas
                             </h3>
                             {result.gaps.length === 0 ? (
-                                <p className="match-findings-empty">No significant gaps identified.</p>
+                                <p className="match-findings-empty">No significant gaps identified — strong alignment with the job requirements.</p>
                             ) : (
                                 <ul className="match-findings-list">
                                     {result.gaps.map((g, i) => (

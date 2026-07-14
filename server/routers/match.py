@@ -2,9 +2,24 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 import fitz  # PyMuPDF
 import httpx
 import re
+import base64
+import asyncio
 from services.llm_service import get_match_analysis, analyze_resume
 
 router = APIRouter()
+
+# Matches a bare GitHub profile URL, e.g. https://github.com/octocat (not a repo path).
+GITHUB_PROFILE_RE = re.compile(r'^https?://(?:www\.)?github\.com/([A-Za-z0-9-]+)/?$')
+
+# Cap on the number of repos whose READMEs are fetched for in-depth analysis. This is
+# intentionally high so that, in practice, ALL of a candidate's non-fork repos are
+# analyzed rather than just a handful -- it only guards against pathological accounts
+# with hundreds of repos (which would blow up GitHub API rate limits / prompt size).
+MAX_REPOS_FOR_README = 100
+
+# Limits how many README fetches run concurrently, to avoid tripping GitHub's secondary
+# rate limits when a candidate has many repositories.
+README_FETCH_CONCURRENCY = 8
 
 
 def extract_pdf_text(file_bytes: bytes) -> str:
@@ -71,6 +86,22 @@ async def fetch_link_contexts(urls: list, max_links: int = 5) -> list:
     return contexts
 
 
+async def fetch_repo_readme(client: httpx.AsyncClient, full_name: str) -> str:
+    """Fetch and decode a repo's README content. Returns '' if unavailable."""
+    try:
+        response = await client.get(f"https://api.github.com/repos/{full_name}/readme")
+        if response.status_code != 200:
+            return ""
+        data = response.json()
+        content = data.get("content", "")
+        if not content:
+            return ""
+        decoded = base64.b64decode(content).decode("utf-8", errors="ignore")
+        return decoded.strip()
+    except Exception:
+        return ""
+
+
 async def fetch_github_profile(url: str) -> dict:
     try:
         # Extract username from GitHub URL
@@ -104,7 +135,34 @@ async def fetch_github_profile(url: str) -> dict:
                 if len(page_repos) < per_page:
                     break
                 page += 1
-            
+
+            # Analyze all of the candidate's repos in depth (excluding forks, unless the
+            # account has none), so gaps/strengths determinations are grounded in the
+            # candidate's actual body of work rather than just a small sample.
+            candidates = [r for r in repos_data if not r.get("fork")] or repos_data
+            candidates = sorted(
+                candidates,
+                key=lambda r: (r.get("stargazers_count", 0), r.get("updated_at", "")),
+                reverse=True,
+            )[:MAX_REPOS_FOR_README]
+
+            readme_semaphore = asyncio.Semaphore(README_FETCH_CONCURRENCY)
+
+            async def fetch_readme_limited(full_name: str) -> str:
+                async with readme_semaphore:
+                    return await fetch_repo_readme(client, full_name)
+
+            readmes = await asyncio.gather(
+                *(fetch_readme_limited(r["full_name"]) for r in candidates if r.get("full_name"))
+            )
+            readme_by_repo = {
+                r["full_name"]: readme
+                for r, readme in zip(candidates, readmes)
+                if readme
+            }
+            for repo in repos_data:
+                repo["readme"] = readme_by_repo.get(repo.get("full_name", ""), "")
+
             return {
                 "username": username,
                 "name": user_data.get("name", username),
@@ -113,7 +171,9 @@ async def fetch_github_profile(url: str) -> dict:
                 "company": user_data.get("company", ""),
                 "public_repos": user_data.get("public_repos", 0),
                 "followers": user_data.get("followers", 0),
-                "repos": repos_data
+                "profile_url": f"https://github.com/{username}",
+                "repos": repos_data,
+                "repos_analyzed": [r["full_name"] for r in candidates if r.get("full_name")],
             }
             
     except httpx.TimeoutException:
@@ -185,8 +245,12 @@ async def compare(
 async def analyze_resume_endpoint(
     resume: UploadFile = File(...),
     visit_links: bool = Form(False),
+    github_url: str = Form(None),
 ):
-    """Analyze a resume and optionally visit links found in it."""
+    """Analyze a resume, optionally visiting links found in it and/or a candidate's
+    GitHub profile. When a GitHub profile is involved (either passed explicitly via
+    `github_url` or discovered among the resume's links), the candidate's repositories
+    -- not just their profile bio -- are fetched and analyzed for the determination."""
     resume_bytes = await resume.read()
     if not resume_bytes:
         raise HTTPException(status_code=400, detail="resume file is empty.")
@@ -196,18 +260,47 @@ async def analyze_resume_endpoint(
         raise HTTPException(status_code=422, detail="Could not extract text from resume PDF.")
 
     link_contexts = []
+    github_profile = None
+    visited_urls = []
+
+    if github_url:
+        github_profile = await fetch_github_profile(github_url)
+        visited_urls.append(github_profile["profile_url"])
+
     if visit_links:
-        # Extract URLs from resume text
         urls = extract_urls(resume_text)
-        if urls:
-            # Fetch content from the URLs
-            link_contexts = await fetch_link_contexts(urls, max_links=5)
+        github_urls_in_text = [u for u in urls if GITHUB_PROFILE_RE.match(u)]
+        other_urls = [u for u in urls if u not in github_urls_in_text]
+
+        # If the resume itself links to a GitHub profile, analyze the candidate's
+        # repos in depth rather than just scraping the profile page's HTML.
+        if not github_profile and github_urls_in_text:
+            github_profile = await fetch_github_profile(github_urls_in_text[0])
+            visited_urls.append(github_profile["profile_url"])
+
+        if other_urls:
+            link_contexts = await fetch_link_contexts(other_urls, max_links=5)
+            visited_urls.extend(c["url"] for c in link_contexts)
 
     try:
-        return await analyze_resume(resume_text, link_contexts if link_contexts else None)
+        result = await analyze_resume(
+            resume_text,
+            link_contexts if link_contexts else None,
+            github_profile,
+        )
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Ollama is not running. Start it with: ollama serve")
     except httpx.HTTPStatusError as exc:
         raise HTTPException(status_code=502, detail=f"Ollama returned an error: {exc.response.status_code}")
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Resume analysis failed: {exc}")
+
+    if github_profile:
+        visited_urls.extend(
+            repo.get("html_url") for repo in github_profile.get("repos", []) if repo.get("html_url")
+        )
+    if visited_urls:
+        # Reflect the URLs we actually fetched, rather than trusting the LLM's guess.
+        result["links_visited"] = sorted(set(visited_urls))
+
+    return result

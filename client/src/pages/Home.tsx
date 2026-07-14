@@ -166,13 +166,13 @@ export function HomePage() {
                         <GitBranch size={14} />
                         Repo Analysis
                     </button>
-                    {/* <button
+                     {/* <button
                         className={cn('sidebar-mode-tab', { active: sidebarMode === 'match' })}
                         onClick={() => setSidebarMode('match')}
                     >
                         <Briefcase size={14} />
                         Resume Match
-                    </button> */}
+                    </button>  */}
                     <button
                         className={cn('sidebar-mode-tab', { active: sidebarMode === 'analyze' })}
                         onClick={() => setSidebarMode('analyze')}

@@ -6,6 +6,7 @@ import {
     BookOpen,
     Briefcase,
     ExternalLink,
+    GitBranch,
     GraduationCap,
     Loader2,
     Sparkles,
@@ -86,6 +87,7 @@ function FileDrop({ file, onChange }: FileDropProps) {
 export function ResumeAnalysisPanel() {
     const [resumeFile, setResumeFile] = useState<File | null>(null);
     const [visitLinks, setVisitLinks] = useState(false);
+    const [githubUrl, setGithubUrl] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null);
@@ -98,7 +100,7 @@ export function ResumeAnalysisPanel() {
         setError('');
         setAnalysis(null);
         try {
-            const data = await analyzeResume(resumeFile, visitLinks);
+            const data = await analyzeResume(resumeFile, visitLinks, githubUrl);
             setAnalysis(data);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Analysis failed. Please try again.');
@@ -131,7 +133,31 @@ export function ResumeAnalysisPanel() {
                     Candidate Resume
                 </div>
                 <FileDrop file={resumeFile} onChange={setResumeFile} />
-                
+
+                <div className="match-url-input" style={{ marginTop: 'var(--space-3)' }}>
+                    <GitBranch size={16} className="match-url-icon" />
+                    <input
+                        type="url"
+                        placeholder="Paste candidate's GitHub profile URL (optional)"
+                        value={githubUrl}
+                        onChange={(e) => setGithubUrl(e.target.value)}
+                        disabled={loading}
+                        className="match-url-field"
+                    />
+                    {githubUrl && (
+                        <button
+                            className="match-url-clear"
+                            onClick={() => setGithubUrl('')}
+                            aria-label="Clear URL"
+                        >
+                            <XCircle size={14} />
+                        </button>
+                    )}
+                </div>
+                <p className="match-url-hint">
+                    When provided, the agent fetches the candidate's GitHub repositories (not just their profile) to inform the analysis.
+                </p>
+
                 <div className="match-url-input" style={{ marginTop: 'var(--space-3)' }}>
                     <label className="match-url-checkbox">
                         <input
