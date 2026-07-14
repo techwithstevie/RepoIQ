@@ -84,27 +84,29 @@ async def get_structured_answer(question: str, chunks: List[Dict[str, Any]]) -> 
         return {"summary": raw.strip() or "Not enough context.", "highlights": []}
 
 MATCH_SYSTEM_PROMPT = """You are a hiring AI agent. You will be given a Job Description and either a Candidate Resume or GitHub Profile.
+Provide detailed, comprehensive analysis with specific examples and explanations.
 Respond ONLY with a single valid JSON object matching this schema exactly:
 {
   "fit_score": <integer 0-100>,
   "verdict": "Strong Fit | Moderate Fit | Weak Fit",
-  "strengths": ["<reason>", ...],
-  "gaps": ["<reason>", ...],
-  "recommendation": "<1-2 sentence summary>",
+  "strengths": ["<detailed reason with specific examples>", ...],
+  "gaps": ["<detailed reason with specific examples>", ...],
+  "recommendation": "<comprehensive 3-4 sentence summary with specific reasoning>",
   "relevant_repos": [
     {
       "name": "<repo name>",
       "relevance_score": <integer 0-100>,
-      "description": "<what the candidate did in this repo>",
-      "fit_reason": "<why this repo shows they're a good fit for the job>"
+      "description": "<detailed explanation of what the candidate did in this repo, including technologies used and implementation details>",
+      "fit_reason": "<detailed explanation of why this repo demonstrates they're a good fit, with specific connections to job requirements>"
     }
   ]
 }
+Provide 5-8 detailed strengths and gaps when possible. For relevant_repos, provide 3-5 repos with extensive detail.
 Do NOT include any text, markdown, or explanation outside the JSON object."""
 
 
 def build_match_prompt(jd_text: str, resume_text: str = None, github_profile: dict = None) -> str:
-    jd_trimmed = jd_text[:4000].strip()
+    jd_trimmed = jd_text[:12000].strip()
     
     if github_profile:
         # Build GitHub profile text
@@ -131,7 +133,7 @@ def build_match_prompt(jd_text: str, resume_text: str = None, github_profile: di
         candidate_text = "\n".join(profile_parts)
         candidate_label = "CANDIDATE GITHUB PROFILE"
     else:
-        candidate_text = resume_text[:4000].strip()
+        candidate_text = resume_text[:12000].strip()
         candidate_label = "CANDIDATE RESUME"
     
     prompt = (
@@ -159,7 +161,7 @@ async def get_match_analysis(jd_text: str, resume_text: str = None, github_profi
         "system": MATCH_SYSTEM_PROMPT,
         "stream": False,
         "format": "json",
-        "options": {"temperature": 0.1, "num_predict": 2048},
+        "options": {"temperature": 0.1, "num_predict": 4096},
     }
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(f"{settings.OLLAMA_BASE_URL}/api/generate", json=payload)
@@ -201,4 +203,108 @@ async def get_match_analysis(jd_text: str, resume_text: str = None, github_profi
             "gaps": [],
             "recommendation": raw.strip() or "Analysis failed.",
             "relevant_repos": [],
+        }
+
+
+RESUME_ANALYSIS_SYSTEM_PROMPT = """You are a resume analysis AI. You will be given a candidate's resume text and optionally additional context from links in their resume.
+Provide detailed, comprehensive analysis with specific examples and explanations.
+Respond ONLY with a single valid JSON object matching this schema exactly:
+{
+  "summary": "<comprehensive 4-5 sentence overview of the candidate's background, expertise, and key qualifications>",
+  "current_title": "<current job title or 'Not specified'>",
+  "education": [
+    {
+      "institution": "<school name>",
+      "degree": "<degree obtained>",
+      "field": "<field of study>",
+      "year": "<graduation year or date range>"
+    }
+  ],
+  "skills": ["<detailed skill with context of experience level>", ...],
+  "projects": [
+    {
+      "name": "<project name>",
+      "description": "<detailed explanation of what the project does, its purpose, and technical implementation>",
+      "technologies": ["<tech1>", "<tech2>"],
+      "role": "<detailed explanation of the candidate's specific role and contributions>"
+    }
+  ],
+  "experience_summary": "<comprehensive summary of work experience with specific roles, responsibilities, and achievements>",
+  "links_visited": ["<url1>", "<url2>"]
+}
+Provide 10-15 detailed skills when possible. For projects, provide 5-8 projects with extensive detail about implementation and contributions.
+Do NOT include any text, markdown, or explanation outside the JSON object."""
+
+
+def build_resume_analysis_prompt(resume_text: str, link_contexts: list = None) -> str:
+    prompt = f"RESUME TEXT:\n{resume_text[:15000]}\n\n"
+    
+    if link_contexts:
+        prompt += "ADDITIONAL CONTEXT FROM LINKS:\n"
+        for i, context in enumerate(link_contexts, 1):
+            prompt += f"\n[Link {i} - {context.get('url', 'Unknown')}]\n"
+            prompt += f"{context.get('content', 'No content available')[:5000]}\n"
+        prompt += "\n"
+    
+    prompt += (
+        "Analyze this resume and extract the key information with extensive detail. "
+        "If additional context from links was provided, incorporate that information into your analysis. "
+        "Return ONLY the JSON object as specified."
+    )
+    
+    return prompt
+
+
+async def analyze_resume(resume_text: str, link_contexts: list = None) -> Dict[str, Any]:
+    payload = {
+        "model": settings.OLLAMA_MODEL,
+        "prompt": build_resume_analysis_prompt(resume_text, link_contexts),
+        "system": RESUME_ANALYSIS_SYSTEM_PROMPT,
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0.1, "num_predict": 4096},
+    }
+    async with httpx.AsyncClient(timeout=180) as client:
+        resp = await client.post(f"{settings.OLLAMA_BASE_URL}/api/generate", json=payload)
+        resp.raise_for_status()
+        raw = resp.json().get("response", "")
+
+    try:
+        parsed = json.loads(raw)
+        return {
+            "summary": str(parsed.get("summary", "")).strip(),
+            "current_title": str(parsed.get("current_title", "Not specified")).strip(),
+            "education": [
+                {
+                    "institution": str(edu.get("institution", "")).strip(),
+                    "degree": str(edu.get("degree", "")).strip(),
+                    "field": str(edu.get("field", "")).strip(),
+                    "year": str(edu.get("year", "")).strip(),
+                }
+                for edu in parsed.get("education", [])
+                if edu.get("institution")
+            ],
+            "skills": [str(skill).strip() for skill in parsed.get("skills", []) if str(skill).strip()],
+            "projects": [
+                {
+                    "name": str(proj.get("name", "")).strip(),
+                    "description": str(proj.get("description", "")).strip(),
+                    "technologies": [str(tech).strip() for tech in proj.get("technologies", []) if str(tech).strip()],
+                    "role": str(proj.get("role", "")).strip(),
+                }
+                for proj in parsed.get("projects", [])
+                if proj.get("name")
+            ],
+            "experience_summary": str(parsed.get("experience_summary", "")).strip(),
+            "links_visited": [str(url).strip() for url in parsed.get("links_visited", []) if str(url).strip()],
+        }
+    except (json.JSONDecodeError, ValueError):
+        return {
+            "summary": raw.strip() or "Analysis failed.",
+            "current_title": "Unknown",
+            "education": [],
+            "skills": [],
+            "projects": [],
+            "experience_summary": "",
+            "links_visited": [],
         }

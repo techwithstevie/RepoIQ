@@ -1564,42 +1564,56 @@ textarea {
 
 .sidebar-mode-tabs {
     display: flex;
-    gap: var(--space-1);
+    flex-direction: column;
+    gap: 2px;
     margin-bottom: var(--space-5);
-    padding: 4px;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.02);
 }
 
 .sidebar-mode-tab {
-    flex: 1;
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    padding: 0.55rem 0.75rem;
-    border-radius: 10px;
+    gap: var(--space-3);
+    width: 100%;
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-sm);
+    border-left: 2px solid transparent;
     color: var(--text-faint);
     font-size: var(--text-xs);
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: 0.01em;
     white-space: nowrap;
+    text-align: left;
+    transition:
+        background var(--transition),
+        border-color var(--transition),
+        color var(--transition);
+}
+
+.sidebar-mode-tab svg {
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: opacity var(--transition), color var(--transition);
 }
 
 .sidebar-mode-tab:hover {
-    color: var(--text-muted);
     background: rgba(255, 255, 255, 0.04);
+    border-left-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+}
+
+.sidebar-mode-tab:hover svg {
+    opacity: 0.8;
 }
 
 .sidebar-mode-tab.active {
-    background: linear-gradient(135deg, var(--surface-3), var(--surface-2));
+    background: rgba(92, 217, 188, 0.07);
+    border-left-color: var(--accent);
     color: var(--text);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .sidebar-mode-tab.active svg {
     color: var(--accent);
+    opacity: 1;
 }
 
 /* ─── Resume Match Panel ──────────────────────────────── */
@@ -2101,4 +2115,176 @@ textarea {
 .match-repo-fit strong {
     color: var(--text);
     font-weight: 600;
+}
+
+/* ─── Resume Analysis ─────────────────────────────────── */
+
+.resume-analysis-results {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.resume-analysis-section {
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.015);
+}
+
+.resume-analysis-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-bottom: var(--space-4);
+}
+
+.resume-analysis-title svg {
+    color: var(--accent);
+}
+
+.resume-analysis-text {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.resume-analysis-empty {
+    color: var(--text-faint);
+    font-size: var(--text-sm);
+    font-style: italic;
+}
+
+.resume-analysis-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.resume-analysis-item {
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.resume-analysis-item--project {
+    background: rgba(92, 217, 188, 0.03);
+    border-color: rgba(92, 217, 188, 0.15);
+}
+
+.resume-analysis-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.resume-analysis-item-header strong {
+    color: var(--text);
+    font-size: var(--text-base);
+    font-weight: 600;
+}
+
+.resume-analysis-item-year {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+}
+
+.resume-analysis-item-role {
+    color: var(--accent);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.resume-analysis-item-description {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    margin: 0 0 var(--space-2) 0;
+}
+
+.resume-analysis-item-tech {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.resume-analysis-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.resume-analysis-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-weight: 500;
+}
+
+.resume-analysis-tag--small {
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.75rem;
+}
+
+.resume-analysis-links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.resume-analysis-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    text-decoration: none;
+    transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+
+.resume-analysis-link:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
+}
+
+.resume-analysis-link svg {
+    flex-shrink: 0;
+}
+
+.match-url-checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    cursor: pointer;
+    user-select: none;
+}
+
+.match-url-checkbox input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+
+.match-url-checkbox span {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
 }

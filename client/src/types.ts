@@ -53,3 +53,27 @@ export interface MatchResult {
     recommendation: string;
     relevant_repos?: RelevantRepo[];
 }
+
+export interface Education {
+    institution: string;
+    degree: string;
+    field: string;
+    year: string;
+}
+
+export interface Project {
+    name: string;
+    description: string;
+    technologies: string[];
+    role: string;
+}
+
+export interface ResumeAnalysis {
+    summary: string;
+    current_title: string;
+    education: Education[];
+    skills: string[];
+    projects: Project[];
+    experience_summary: string;
+    links_visited: string[];
+}

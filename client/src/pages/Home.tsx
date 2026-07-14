@@ -1,6 +1,7 @@
 import { ChatWindow } from '@/components/ChatWindow';
 import IngestPanel from '@/components/IngestPanel';
 import RepoSelector from '@/components/RepoSelector';
+import ResumeAnalysisPanel from '@/components/ResumeAnalysisPanel';
 import ResumeMatchPanel from '@/components/ResumeMatchPanel';
 import SummaryPanel from '@/components/SummaryPanel';
 import { cn, displaySlug } from '@/lib/utils';
@@ -9,10 +10,11 @@ import type { EvidenceFile, RepoStats, SummaryResult } from '@/types';
 import {
     BookOpen,
     Bot,
-    Briefcase,
+    // Briefcase,
     ChevronRight,
     Database,
     FileCode2,
+    FileText,
     GitBranch,
     Loader2,
     MessageSquare,
@@ -22,7 +24,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Tab = 'overview' | 'evidence' | 'chat';
-type SidebarMode = 'repo' | 'match';
+type SidebarMode = 'repo' | 'match' | 'analyze';
 
 
 export function HomePage() {
@@ -155,6 +157,7 @@ export function HomePage() {
                     </div>
                 </div>
 
+                <div className="sidebar-label">Workspace</div>
                 <nav className="sidebar-mode-tabs" aria-label="App mode">
                     <button
                         className={cn('sidebar-mode-tab', { active: sidebarMode === 'repo' })}
@@ -163,12 +166,19 @@ export function HomePage() {
                         <GitBranch size={14} />
                         Repo Analysis
                     </button>
-                    <button
+                    {/* <button
                         className={cn('sidebar-mode-tab', { active: sidebarMode === 'match' })}
                         onClick={() => setSidebarMode('match')}
                     >
                         <Briefcase size={14} />
                         Resume Match
+                    </button> */}
+                    <button
+                        className={cn('sidebar-mode-tab', { active: sidebarMode === 'analyze' })}
+                        onClick={() => setSidebarMode('analyze')}
+                    >
+                        <FileText size={14} />
+                        Resume Analysis
                     </button>
                 </nav>
 
@@ -192,6 +202,7 @@ export function HomePage() {
 
             <main className="main-shell">
                 {sidebarMode === 'match' && <ResumeMatchPanel />}
+                {sidebarMode === 'analyze' && <ResumeAnalysisPanel />}
                 {sidebarMode === 'repo' && (
                     <>
                         <header className="topbar">

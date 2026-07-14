@@ -113,3 +113,14 @@ export async function compareResumeToJob(jdFile: File | null, resumeFile: File |
     if (!r.ok) throw new Error(await r.text());
     return r.json();
 }
+
+import type { ResumeAnalysis } from '@/types';
+
+export async function analyzeResume(resumeFile: File, visitLinks: boolean = false) {
+    const form = new FormData();
+    form.append('resume', resumeFile);
+    form.append('visit_links', visitLinks.toString());
+    const r = await fetch('/api/match/analyze-resume', { method: 'POST', body: form });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json() as Promise<ResumeAnalysis>;
+}

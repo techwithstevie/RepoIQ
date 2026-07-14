@@ -1,7 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 import fitz  # PyMuPDF
 import httpx
-from services.llm_service import get_match_analysis
+import re
+from services.llm_service import get_match_analysis, analyze_resume
 
 router = APIRouter()
 
@@ -26,6 +27,48 @@ async def fetch_url_text(url: str) -> str:
         raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {exc.response.status_code}")
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {exc}")
+
+
+def extract_urls(text: str) -> list:
+    """Extract URLs from text using regex."""
+    url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+    urls = re.findall(url_pattern, text)
+    # Filter out common non-content URLs
+    excluded_domains = ['mailto:', 'tel:', 'javascript:', '#']
+    filtered_urls = [
+        url for url in urls 
+        if not any(excluded in url.lower() for excluded in excluded_domains)
+        and len(url) > 10  # Minimum reasonable URL length
+    ]
+    return list(set(filtered_urls))  # Remove duplicates
+
+
+async def fetch_link_contexts(urls: list, max_links: int = 5) -> list:
+    """Fetch content from multiple URLs with a limit."""
+    contexts = []
+    if not urls:
+        return contexts
+    
+    # Limit the number of links to visit
+    urls_to_visit = urls[:max_links]
+    
+    for url in urls_to_visit:
+        try:
+            content = await fetch_url_text(url)
+            # Basic text cleanup - remove HTML tags
+            clean_content = re.sub(r'<[^>]+>', ' ', content)
+            clean_content = re.sub(r'\s+', ' ', clean_content).strip()
+            
+            if clean_content:
+                contexts.append({
+                    "url": url,
+                    "content": clean_content[:3000]  # Limit content length
+                })
+        except Exception:
+            # Skip failed links silently
+            continue
+    
+    return contexts
 
 
 async def fetch_github_profile(url: str) -> dict:
@@ -136,3 +179,35 @@ async def compare(
         raise HTTPException(status_code=502, detail=f"Ollama returned an error: {exc.response.status_code}")
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}")
+
+
+@router.post("/analyze-resume")
+async def analyze_resume_endpoint(
+    resume: UploadFile = File(...),
+    visit_links: bool = Form(False),
+):
+    """Analyze a resume and optionally visit links found in it."""
+    resume_bytes = await resume.read()
+    if not resume_bytes:
+        raise HTTPException(status_code=400, detail="resume file is empty.")
+
+    resume_text = extract_pdf_text(resume_bytes)
+    if not resume_text:
+        raise HTTPException(status_code=422, detail="Could not extract text from resume PDF.")
+
+    link_contexts = []
+    if visit_links:
+        # Extract URLs from resume text
+        urls = extract_urls(resume_text)
+        if urls:
+            # Fetch content from the URLs
+            link_contexts = await fetch_link_contexts(urls, max_links=5)
+
+    try:
+        return await analyze_resume(resume_text, link_contexts if link_contexts else None)
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Ollama is not running. Start it with: ollama serve")
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Ollama returned an error: {exc.response.status_code}")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Resume analysis failed: {exc}")
