@@ -4,6 +4,7 @@ import {
     AlertCircle,
     CheckCircle2,
     FileText,
+    GitBranch,
     Globe,
     Loader2,
     Sparkles,
@@ -130,20 +131,21 @@ export function ResumeMatchPanel() {
     const [jdFile, setJdFile] = useState<File | null>(null);
     const [jdUrl, setJdUrl] = useState('');
     const [resumeFile, setResumeFile] = useState<File | null>(null);
+    const [githubUrl, setGithubUrl] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [result, setResult] = useState<MatchResult | null>(null);
 
-    const canCompare = (!!jdFile || jdUrl) && !!resumeFile && !loading;
+    const canCompare = (!!jdFile || jdUrl) && (!!resumeFile || githubUrl) && !loading;
 
     const handleCompare = async () => {
-        if (!resumeFile) return;
+        if (!resumeFile && !githubUrl) return;
         if (!jdFile && !jdUrl) return;
         setLoading(true);
         setError('');
         setResult(null);
         try {
-            const data = await compareResumeToJob(jdFile, resumeFile, jdUrl);
+            const data = await compareResumeToJob(jdFile, resumeFile, jdUrl, githubUrl);
             setResult(data);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Comparison failed. Please try again.');
@@ -216,8 +218,32 @@ export function ResumeMatchPanel() {
                         inputId="resume-upload"
                         label="Resume PDF"
                         file={resumeFile}
-                        onChange={setResumeFile}
+                        onChange={(f) => {
+                            setResumeFile(f);
+                            if (f) setGithubUrl('');
+                        }}
                     />
+                    <div className="match-url-divider">or</div>
+                    <div className="match-url-input">
+                        <GitBranch size={16} className="match-url-icon" />
+                        <input
+                            type="url"
+                            placeholder="Paste GitHub profile URL"
+                            value={githubUrl}
+                            onChange={(e) => setGithubUrl(e.target.value)}
+                            disabled={!!resumeFile}
+                            className="match-url-field"
+                        />
+                        {githubUrl && (
+                            <button
+                                className="match-url-clear"
+                                onClick={() => setGithubUrl('')}
+                                aria-label="Clear URL"
+                            >
+                                <XCircle size={14} />
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

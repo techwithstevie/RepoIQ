@@ -95,7 +95,7 @@ export function streamQuestion(
     return ctrl;
 }
 
-export async function compareResumeToJob(jdFile: File | null, resumeFile: File, jdUrl: string = '') {
+export async function compareResumeToJob(jdFile: File | null, resumeFile: File | null, jdUrl: string = '', githubUrl: string = '') {
     const form = new FormData();
     if (jdFile) {
         form.append('job_description', jdFile);
@@ -103,7 +103,12 @@ export async function compareResumeToJob(jdFile: File | null, resumeFile: File, 
     if (jdUrl) {
         form.append('job_description_url', jdUrl);
     }
-    form.append('resume', resumeFile);
+    if (resumeFile) {
+        form.append('resume', resumeFile);
+    }
+    if (githubUrl) {
+        form.append('github_url', githubUrl);
+    }
     const r = await fetch('/api/match/compare', { method: 'POST', body: form });
     if (!r.ok) throw new Error(await r.text());
     return r.json();
