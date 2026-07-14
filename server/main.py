@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from config import settings
-from routers import repos, query, health
+from routers import repos, query, health, match
 
 app = FastAPI(
     title="RepoIQ API",
@@ -29,3 +29,4 @@ async def favicon():
 app.include_router(health.router, tags=["Health"])
 app.include_router(repos.router, prefix="/api/repos", tags=["Repositories"])
 app.include_router(query.router, prefix="/api/query", tags=["Query"])
+app.include_router(match.router, prefix="/api/match", tags=["Resume Match"])

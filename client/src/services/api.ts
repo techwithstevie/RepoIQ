@@ -94,3 +94,12 @@ export function streamQuestion(
     })();
     return ctrl;
 }
+
+export async function compareResumeToJob(jdFile: File, resumeFile: File) {
+    const form = new FormData();
+    form.append('job_description', jdFile);
+    form.append('resume', resumeFile);
+    const r = await fetch('/api/match/compare', { method: 'POST', body: form });
+    if (!r.ok) throw new Error(await r.text());
+    return r.json();
+}

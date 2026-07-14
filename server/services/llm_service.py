@@ -82,3 +82,60 @@ async def get_structured_answer(question: str, chunks: List[Dict[str, Any]]) -> 
         return {"summary": summary or "Not enough context.", "highlights": highlights[:5]}
     except (json.JSONDecodeError, AttributeError):
         return {"summary": raw.strip() or "Not enough context.", "highlights": []}
+
+MATCH_SYSTEM_PROMPT = """You are a hiring AI agent. You will be given a Job Description and a Candidate Resume.
+Respond ONLY with a single valid JSON object matching this schema exactly:
+{
+  "fit_score": <integer 0-100>,
+  "verdict": "Strong Fit | Moderate Fit | Weak Fit",
+  "strengths": ["<reason>", ...],
+  "gaps": ["<reason>", ...],
+  "recommendation": "<1-2 sentence summary>"
+}
+Do NOT include any text, markdown, or explanation outside the JSON object."""
+
+
+def build_match_prompt(jd_text: str, resume_text: str) -> str:
+    jd_trimmed = jd_text[:4000].strip()
+    resume_trimmed = resume_text[:4000].strip()
+    return (
+        f"JOB DESCRIPTION:\n{jd_trimmed}\n\n"
+        f"---\n\n"
+        f"CANDIDATE RESUME:\n{resume_trimmed}\n\n"
+        f"---\n\n"
+        f"Evaluate how well the candidate fits the job. "
+        f"Return ONLY the JSON object as specified."
+    )
+
+
+async def get_match_analysis(jd_text: str, resume_text: str) -> Dict[str, Any]:
+    payload = {
+        "model": settings.OLLAMA_MODEL,
+        "prompt": build_match_prompt(jd_text, resume_text),
+        "system": MATCH_SYSTEM_PROMPT,
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0.1, "num_predict": 1024},
+    }
+    async with httpx.AsyncClient(timeout=180) as client:
+        resp = await client.post(f"{settings.OLLAMA_BASE_URL}/api/generate", json=payload)
+        resp.raise_for_status()
+        raw = resp.json().get("response", "")
+
+    try:
+        parsed = json.loads(raw)
+        return {
+            "fit_score": max(0, min(100, int(parsed.get("fit_score", 0)))),
+            "verdict": str(parsed.get("verdict", "Unknown")).strip(),
+            "strengths": [str(s).strip() for s in parsed.get("strengths", []) if str(s).strip()],
+            "gaps": [str(g).strip() for g in parsed.get("gaps", []) if str(g).strip()],
+            "recommendation": str(parsed.get("recommendation", "")).strip(),
+        }
+    except (json.JSONDecodeError, ValueError):
+        return {
+            "fit_score": 0,
+            "verdict": "Unknown",
+            "strengths": [],
+            "gaps": [],
+            "recommendation": raw.strip() or "Analysis failed.",
+        }
