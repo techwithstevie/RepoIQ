@@ -37,3 +37,19 @@ export interface RepoStats {
     stack: string[];
     readiness: number;
 }
+
+export interface RelevantRepo {
+    name: string;
+    relevance_score: number;
+    description: string;
+    fit_reason: string;
+}
+
+export interface MatchResult {
+    fit_score: number;
+    verdict: string;
+    strengths: string[];
+    gaps: string[];
+    recommendation: string;
+    relevant_repos?: RelevantRepo[];
+}

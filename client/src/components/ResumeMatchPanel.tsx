@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { compareResumeToJob } from '@/services/api';
+import type { MatchResult } from '@/types';
 import {
     AlertCircle,
     CheckCircle2,
@@ -12,14 +13,6 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
-
-interface MatchResult {
-    fit_score: number;
-    verdict: string;
-    strengths: string[];
-    gaps: string[];
-    recommendation: string;
-}
 
 function FileDrop({
     label,
@@ -317,6 +310,32 @@ export function ResumeMatchPanel() {
                             )}
                         </section>
                     </div>
+
+                    {result.relevant_repos && result.relevant_repos.length > 0 && (
+                        <section className="match-repos-section">
+                            <h3 className="match-repos-title">
+                                <GitBranch size={18} />
+                                Relevant GitHub Repositories
+                            </h3>
+                            <div className="match-repos-list">
+                                {result.relevant_repos.map((repo, i) => (
+                                    <div key={i} className="match-repo-card">
+                                        <div className="match-repo-header">
+                                            <h4 className="match-repo-name">{repo.name}</h4>
+                                            <div className="match-repo-score">
+                                                <span className="match-repo-score-value">{repo.relevance_score}%</span>
+                                                <span className="match-repo-score-label">relevant</span>
+                                            </div>
+                                        </div>
+                                        <p className="match-repo-description">{repo.description}</p>
+                                        <p className="match-repo-fit">
+                                            <strong>Why it's a good fit:</strong> {repo.fit_reason}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
                 </div>
             )}
         </div>

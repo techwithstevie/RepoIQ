@@ -2008,3 +2008,97 @@ textarea {
     font-size: var(--text-sm);
     font-style: italic;
 }
+
+/* ─── Relevant Repositories ─────────────────────────────── */
+
+.match-repos-section {
+    margin-top: var(--space-6);
+}
+
+.match-repos-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-bottom: var(--space-4);
+}
+
+.match-repos-title svg {
+    color: var(--accent);
+}
+
+.match-repos-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.match-repo-card {
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.015);
+    transition: border-color var(--transition), background var(--transition);
+}
+
+.match-repo-card:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.match-repo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.match-repo-name {
+    color: var(--text);
+    font-size: var(--text-base);
+    font-weight: 600;
+    margin: 0;
+}
+
+.match-repo-score {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.match-repo-score-value {
+    color: var(--accent);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.match-repo-score-label {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.match-repo-description {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    margin: 0 0 var(--space-3) 0;
+}
+
+.match-repo-fit {
+    color: var(--text);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.match-repo-fit strong {
+    color: var(--text);
+    font-weight: 600;
+}

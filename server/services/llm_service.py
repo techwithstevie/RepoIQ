@@ -83,39 +83,83 @@ async def get_structured_answer(question: str, chunks: List[Dict[str, Any]]) -> 
     except (json.JSONDecodeError, AttributeError):
         return {"summary": raw.strip() or "Not enough context.", "highlights": []}
 
-MATCH_SYSTEM_PROMPT = """You are a hiring AI agent. You will be given a Job Description and a Candidate Resume.
+MATCH_SYSTEM_PROMPT = """You are a hiring AI agent. You will be given a Job Description and either a Candidate Resume or GitHub Profile.
 Respond ONLY with a single valid JSON object matching this schema exactly:
 {
   "fit_score": <integer 0-100>,
   "verdict": "Strong Fit | Moderate Fit | Weak Fit",
   "strengths": ["<reason>", ...],
   "gaps": ["<reason>", ...],
-  "recommendation": "<1-2 sentence summary>"
+  "recommendation": "<1-2 sentence summary>",
+  "relevant_repos": [
+    {
+      "name": "<repo name>",
+      "relevance_score": <integer 0-100>,
+      "description": "<what the candidate did in this repo>",
+      "fit_reason": "<why this repo shows they're a good fit for the job>"
+    }
+  ]
 }
 Do NOT include any text, markdown, or explanation outside the JSON object."""
 
 
-def build_match_prompt(jd_text: str, resume_text: str) -> str:
+def build_match_prompt(jd_text: str, resume_text: str = None, github_profile: dict = None) -> str:
     jd_trimmed = jd_text[:4000].strip()
-    resume_trimmed = resume_text[:4000].strip()
-    return (
+    
+    if github_profile:
+        # Build GitHub profile text
+        profile_parts = [
+            f"GitHub Profile: {github_profile.get('name', github_profile.get('username', 'Unknown'))}",
+            f"Username: {github_profile.get('username', 'Unknown')}",
+            f"Bio: {github_profile.get('bio', 'No bio')}",
+            f"Location: {github_profile.get('location', 'Not specified')}",
+            f"Company: {github_profile.get('company', 'Not specified')}",
+            f"Public Repositories: {github_profile.get('public_repos', 0)}",
+            f"Followers: {github_profile.get('followers', 0)}",
+        ]
+        
+        repos = github_profile.get('repos', [])
+        if repos:
+            profile_parts.append("\nRepositories:")
+            for repo in repos:
+                profile_parts.append(
+                    f"- {repo.get('name', 'N/A')}: {repo.get('description', 'No description')} "
+                    f"(Language: {repo.get('language', 'N/A')}, Stars: {repo.get('stargazers_count', 0)}, "
+                    f"Forks: {repo.get('forks_count', 0)})"
+                )
+        
+        candidate_text = "\n".join(profile_parts)
+        candidate_label = "CANDIDATE GITHUB PROFILE"
+    else:
+        candidate_text = resume_text[:4000].strip()
+        candidate_label = "CANDIDATE RESUME"
+    
+    prompt = (
         f"JOB DESCRIPTION:\n{jd_trimmed}\n\n"
         f"---\n\n"
-        f"CANDIDATE RESUME:\n{resume_trimmed}\n\n"
+        f"{candidate_label}:\n{candidate_text}\n\n"
         f"---\n\n"
-        f"Evaluate how well the candidate fits the job. "
-        f"Return ONLY the JSON object as specified."
     )
+    
+    if github_profile:
+        prompt += (
+            "Analyze the candidate's GitHub repositories to identify which ones are most relevant to the job description. "
+            "For each relevant repo, explain what the candidate did and why it demonstrates they're a good fit. "
+        )
+    
+    prompt += "Return ONLY the JSON object as specified."
+    
+    return prompt
 
 
-async def get_match_analysis(jd_text: str, resume_text: str) -> Dict[str, Any]:
+async def get_match_analysis(jd_text: str, resume_text: str = None, github_profile: dict = None) -> Dict[str, Any]:
     payload = {
         "model": settings.OLLAMA_MODEL,
-        "prompt": build_match_prompt(jd_text, resume_text),
+        "prompt": build_match_prompt(jd_text, resume_text, github_profile),
         "system": MATCH_SYSTEM_PROMPT,
         "stream": False,
         "format": "json",
-        "options": {"temperature": 0.1, "num_predict": 1024},
+        "options": {"temperature": 0.1, "num_predict": 2048},
     }
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(f"{settings.OLLAMA_BASE_URL}/api/generate", json=payload)
@@ -124,13 +168,31 @@ async def get_match_analysis(jd_text: str, resume_text: str) -> Dict[str, Any]:
 
     try:
         parsed = json.loads(raw)
-        return {
+        result = {
             "fit_score": max(0, min(100, int(parsed.get("fit_score", 0)))),
             "verdict": str(parsed.get("verdict", "Unknown")).strip(),
             "strengths": [str(s).strip() for s in parsed.get("strengths", []) if str(s).strip()],
             "gaps": [str(g).strip() for g in parsed.get("gaps", []) if str(g).strip()],
             "recommendation": str(parsed.get("recommendation", "")).strip(),
         }
+        
+        # Handle relevant_repos if present
+        if github_profile and "relevant_repos" in parsed:
+            relevant_repos = parsed.get("relevant_repos", [])
+            result["relevant_repos"] = [
+                {
+                    "name": str(repo.get("name", "")).strip(),
+                    "relevance_score": max(0, min(100, int(repo.get("relevance_score", 0)))),
+                    "description": str(repo.get("description", "")).strip(),
+                    "fit_reason": str(repo.get("fit_reason", "")).strip(),
+                }
+                for repo in relevant_repos
+                if repo.get("name") and str(repo.get("name")).strip()
+            ]
+        else:
+            result["relevant_repos"] = []
+        
+        return result
     except (json.JSONDecodeError, ValueError):
         return {
             "fit_score": 0,
@@ -138,4 +200,5 @@ async def get_match_analysis(jd_text: str, resume_text: str) -> Dict[str, Any]:
             "strengths": [],
             "gaps": [],
             "recommendation": raw.strip() or "Analysis failed.",
+            "relevant_repos": [],
         }

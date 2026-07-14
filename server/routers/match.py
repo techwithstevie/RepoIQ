@@ -28,7 +28,7 @@ async def fetch_url_text(url: str) -> str:
         raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {exc}")
 
 
-async def fetch_github_profile(url: str) -> str:
+async def fetch_github_profile(url: str) -> dict:
     try:
         # Extract username from GitHub URL
         if "github.com/" not in url:
@@ -45,35 +45,33 @@ async def fetch_github_profile(url: str) -> str:
             user_response.raise_for_status()
             user_data = user_response.json()
             
-            # Get user repos
-            repos_response = await client.get(f"https://api.github.com/users/{username}/repos?sort=updated&per_page=30")
-            repos_response.raise_for_status()
-            repos_data = repos_response.json()
+            # Get user repos (paginated to get all repos)
+            repos_data = []
+            page = 1
+            per_page = 100
+            while True:
+                repos_response = await client.get(
+                    f"https://api.github.com/users/{username}/repos?sort=updated&per_page={per_page}&page={page}"
+                )
+                repos_response.raise_for_status()
+                page_repos = repos_response.json()
+                if not page_repos:
+                    break
+                repos_data.extend(page_repos)
+                if len(page_repos) < per_page:
+                    break
+                page += 1
             
-            # Build profile text
-            profile_parts = []
-            
-            # Add basic profile info
-            profile_parts.append(f"GitHub Profile: {user_data.get('name', username)}")
-            profile_parts.append(f"Username: {username}")
-            if user_data.get('bio'):
-                profile_parts.append(f"Bio: {user_data['bio']}")
-            if user_data.get('location'):
-                profile_parts.append(f"Location: {user_data['location']}")
-            if user_data.get('company'):
-                profile_parts.append(f"Company: {user_data['company']}")
-            profile_parts.append(f"Public Repositories: {user_data.get('public_repos', 0)}")
-            profile_parts.append(f"Followers: {user_data.get('followers', 0)}")
-            
-            # Add repository information
-            if repos_data:
-                profile_parts.append("\nRecent Repositories:")
-                for repo in repos_data[:10]:  # Limit to top 10 repos
-                    profile_parts.append(f"- {repo.get('name', 'N/A')}: {repo.get('description', 'No description')}")
-                    profile_parts.append(f"  Language: {repo.get('language', 'N/A')}")
-                    profile_parts.append(f"  Stars: {repo.get('stargazers_count', 0)}, Forks: {repo.get('forks_count', 0)}")
-            
-            return "\n".join(profile_parts)
+            return {
+                "username": username,
+                "name": user_data.get("name", username),
+                "bio": user_data.get("bio", ""),
+                "location": user_data.get("location", ""),
+                "company": user_data.get("company", ""),
+                "public_repos": user_data.get("public_repos", 0),
+                "followers": user_data.get("followers", 0),
+                "repos": repos_data
+            }
             
     except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="Request to GitHub API timed out.")
@@ -111,10 +109,12 @@ async def compare(
         resume_text = extract_pdf_text(resume_bytes)
         if not resume_text:
             raise HTTPException(status_code=422, detail="Could not extract text from resume PDF.")
+        github_profile = None
     else:
-        resume_text = await fetch_github_profile(github_url)
-        if not resume_text:
+        github_profile = await fetch_github_profile(github_url)
+        if not github_profile:
             raise HTTPException(status_code=422, detail="Could not fetch GitHub profile data.")
+        resume_text = None
 
     if job_description:
         jd_bytes = await job_description.read()
@@ -129,7 +129,7 @@ async def compare(
             raise HTTPException(status_code=422, detail="Could not extract text from job description URL.")
 
     try:
-        return await get_match_analysis(jd_text, resume_text)
+        return await get_match_analysis(jd_text, resume_text, github_profile)
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Ollama is not running. Start it with: ollama serve")
     except httpx.HTTPStatusError as exc:
