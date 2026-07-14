@@ -95,9 +95,14 @@ export function streamQuestion(
     return ctrl;
 }
 
-export async function compareResumeToJob(jdFile: File, resumeFile: File) {
+export async function compareResumeToJob(jdFile: File | null, resumeFile: File, jdUrl: string = '') {
     const form = new FormData();
-    form.append('job_description', jdFile);
+    if (jdFile) {
+        form.append('job_description', jdFile);
+    }
+    if (jdUrl) {
+        form.append('job_description_url', jdUrl);
+    }
     form.append('resume', resumeFile);
     const r = await fetch('/api/match/compare', { method: 'POST', body: form });
     if (!r.ok) throw new Error(await r.text());

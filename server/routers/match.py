@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 import fitz  # PyMuPDF
 import httpx
 from services.llm_service import get_match_analysis
@@ -14,26 +14,51 @@ def extract_pdf_text(file_bytes: bytes) -> str:
         raise HTTPException(status_code=400, detail=f"Could not parse PDF: {exc}")
 
 
+async def fetch_url_text(url: str) -> str:
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.text
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=408, detail="Request to URL timed out.")
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {exc.response.status_code}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {exc}")
+
+
 @router.post("/compare")
 async def compare(
-    job_description: UploadFile = File(...),
+    job_description: UploadFile = File(None),
+    job_description_url: str = Form(None),
     resume: UploadFile = File(...),
 ):
-    jd_bytes = await job_description.read()
-    resume_bytes = await resume.read()
+    if not job_description and not job_description_url:
+        raise HTTPException(status_code=400, detail="Either job_description file or job_description_url must be provided.")
+    
+    if job_description and job_description_url:
+        raise HTTPException(status_code=400, detail="Provide either job_description file or job_description_url, not both.")
 
-    if not jd_bytes:
-        raise HTTPException(status_code=400, detail="job_description file is empty.")
+    resume_bytes = await resume.read()
     if not resume_bytes:
         raise HTTPException(status_code=400, detail="resume file is empty.")
 
-    jd_text = extract_pdf_text(jd_bytes)
     resume_text = extract_pdf_text(resume_bytes)
-
-    if not jd_text:
-        raise HTTPException(status_code=422, detail="Could not extract text from job description PDF.")
     if not resume_text:
         raise HTTPException(status_code=422, detail="Could not extract text from resume PDF.")
+
+    if job_description:
+        jd_bytes = await job_description.read()
+        if not jd_bytes:
+            raise HTTPException(status_code=400, detail="job_description file is empty.")
+        jd_text = extract_pdf_text(jd_bytes)
+        if not jd_text:
+            raise HTTPException(status_code=422, detail="Could not extract text from job description PDF.")
+    else:
+        jd_text = await fetch_url_text(job_description_url)
+        if not jd_text:
+            raise HTTPException(status_code=422, detail="Could not extract text from job description URL.")
 
     try:
         return await get_match_analysis(jd_text, resume_text)

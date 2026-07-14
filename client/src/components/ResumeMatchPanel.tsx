@@ -4,6 +4,7 @@ import {
     AlertCircle,
     CheckCircle2,
     FileText,
+    Globe,
     Loader2,
     Sparkles,
     Upload,
@@ -127,20 +128,22 @@ function VerdictPill({ verdict }: { verdict: string }) {
 
 export function ResumeMatchPanel() {
     const [jdFile, setJdFile] = useState<File | null>(null);
+    const [jdUrl, setJdUrl] = useState('');
     const [resumeFile, setResumeFile] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [result, setResult] = useState<MatchResult | null>(null);
 
-    const canCompare = !!jdFile && !!resumeFile && !loading;
+    const canCompare = (!!jdFile || jdUrl) && !!resumeFile && !loading;
 
     const handleCompare = async () => {
-        if (!jdFile || !resumeFile) return;
+        if (!resumeFile) return;
+        if (!jdFile && !jdUrl) return;
         setLoading(true);
         setError('');
         setResult(null);
         try {
-            const data = await compareResumeToJob(jdFile, resumeFile);
+            const data = await compareResumeToJob(jdFile, resumeFile, jdUrl);
             setResult(data);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Comparison failed. Please try again.');
@@ -177,8 +180,32 @@ export function ResumeMatchPanel() {
                         inputId="jd-upload"
                         label="Job Description PDF"
                         file={jdFile}
-                        onChange={setJdFile}
+                        onChange={(f) => {
+                            setJdFile(f);
+                            if (f) setJdUrl('');
+                        }}
                     />
+                    <div className="match-url-divider">or</div>
+                    <div className="match-url-input">
+                        <Globe size={16} className="match-url-icon" />
+                        <input
+                            type="url"
+                            placeholder="Paste job description URL"
+                            value={jdUrl}
+                            onChange={(e) => setJdUrl(e.target.value)}
+                            disabled={!!jdFile}
+                            className="match-url-field"
+                        />
+                        {jdUrl && (
+                            <button
+                                className="match-url-clear"
+                                onClick={() => setJdUrl('')}
+                                aria-label="Clear URL"
+                            >
+                                <XCircle size={14} />
+                            </button>
+                        )}
+                    </div>
                 </div>
                 <div className="match-upload-card">
                     <div className="match-upload-label">
